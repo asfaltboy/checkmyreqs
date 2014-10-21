@@ -27,9 +27,9 @@ try:
 except ImportError:
     from xmlrpclib import ServerProxy
 
+DEFAULT_PYPI_INDEX = 'http://pypi.python.org/pypi'
 
 BASE_PATH = os.path.dirname(os.path.abspath(__file__))
-CLIENT = ServerProxy('http://pypi.python.org/pypi')
 
 IGNORED_PREFIXES = ['#', 'git+', 'hg+', 'svn+', 'bzr+', '\n', '\r\n']
 
@@ -37,11 +37,13 @@ IGNORED_PREFIXES = ['#', 'git+', 'hg+', 'svn+', 'bzr+', '\n', '\r\n']
 def parse_requirements_file(req_file):
     """
     Parse a requirements file, returning packages with versions in a dictionary
+    as well as a custom package index url to use.
     :param req_file: requirements file to parse
 
-    :return dict of package names and versions
+    :return tuple of (dict of package names and versions, packages index url)
     """
     packages = {}
+    custom_index = None
 
     for line in req_file:
         line = line.strip()
@@ -55,27 +57,33 @@ def parse_requirements_file(req_file):
             if '==' in line:
                 package_name, version = line.split('==')
                 packages[package_name] = version
+            elif line.startswith('-i') or line.startswith('--index-url'):
+                if line.startswith('-i'):
+                    custom_index = line[2:].strip()
+                else:
+                    custom_index = line[len('--index-url'):].strip().lstrip('=')
             else:
                 print(TERMINAL.yellow('{} not pinned to a version, skipping'.format(line)))
 
-    return packages
+    return packages, custom_index
 
-def check_packages(packages, python_version):
+def check_packages(packages, python_version, client):
     """
     Checks a list of packages for compatibility with the given Python version
     Prints warning line if the package is not supported for the given Python version
     If upgrading the package will allow compatibility, the version to upgrade is printed
-    If the package is not listed on pypi.python.org, error line is printed
+    If the package is not listed on pypi server, error line is printed
 
     :param packages: dict of packages names and versions
     :param python_version: python version to be checked for support
+    :param client: an xmlrpclib.ServerProxy instance to use
     """
 
     for package_name, package_version in packages.items():
         print(TERMINAL.bold(package_name))
 
-        package_info = CLIENT.release_data(package_name, package_version)
-        package_releases = CLIENT.package_releases(package_name)
+        package_info = client.release_data(package_name, package_version)
+        package_releases = client.package_releases(package_name)
 
         if package_releases:
             supported_pythons = get_supported_pythons(package_info)
@@ -92,7 +100,7 @@ def check_packages(packages, python_version):
                 print(TERMINAL.green('compatible'))
             else:
                 latest_version = package_releases[0]
-                latest_package_info = CLIENT.release_data(package_name, latest_version)
+                latest_package_info = client.release_data(package_name, latest_version)
                 latest_supported_pythons = get_supported_pythons(latest_package_info)
 
                 upgrade_available = ''
@@ -114,7 +122,7 @@ def check_packages(packages, python_version):
                     print(TERMINAL.yellow('not specified{}').format(upgrade_available))
 
         else:
-            print(TERMINAL.red('not listed on pypi.python.org'))
+            print(TERMINAL.red('not listed on {}'.format(str(client))))
 
         print('-----')
 
@@ -122,7 +130,7 @@ def check_packages(packages, python_version):
 def get_supported_pythons(package_info):
     """
     Returns a list of supported python versions for a specific package version
-    :param package_info: package info dictionary, retrieved from pypi.python.org
+    :param package_info: package info dictionary, retrieved from pypi server
     :return: Versions of Python supported, may be empty
     """
     versions = []
@@ -180,8 +188,9 @@ def main():
     for filepath in args_files:
         print('{0}\r\n*****'.format(filepath.name))
 
-        packages = parse_requirements_file(filepath)
-        check_packages(packages, args.python)
+        packages, index_url = parse_requirements_file(filepath)
+        client = ServerProxy(index_url or DEFAULT_PYPI_INDEX)
+        check_packages(packages, args.python, client)
         print('\n')
 
 

@@ -1,0 +1,3 @@
+-i http://pypi-cheeseshop-index/simple
+
+Django==1.4.5

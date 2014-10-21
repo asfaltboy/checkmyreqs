@@ -22,8 +22,9 @@ class TestRequirementFileParserTestCases(unittest.TestCase):
         Test that script works with an empty requirements file
         """
         with open(os.path.join(BASE_PATH, 'files/requirements_empty.txt')) as f:
-            packages = parse_requirements_file(f)
+            packages, index = parse_requirements_file(f)
 
+        self.assertIsNone(index)
         self.assertEqual(len(packages), 0)
 
     def test_file_with_comments(self):
@@ -31,9 +32,10 @@ class TestRequirementFileParserTestCases(unittest.TestCase):
         Test that a requirements file with comments does not throw errors
         """
         with open(os.path.join(BASE_PATH, 'files/requirements_comments.txt')) as f:
-            packages = parse_requirements_file(f)
+            packages, index = parse_requirements_file(f)
 
         # The file has one package, Django
+        self.assertIsNone(index)
         self.assertEqual(len(packages), 1)
 
     def test_file_with_repo_links(self):
@@ -41,9 +43,10 @@ class TestRequirementFileParserTestCases(unittest.TestCase):
         Test that repository links are skipped
         """
         with open(os.path.join(BASE_PATH, 'files/requirements_repos.txt')) as f:
-            packages = parse_requirements_file(f)
+            packages, index = parse_requirements_file(f)
 
         # packages should only include the gitconfig package
+        self.assertIsNone(index)
         self.assertEqual(len(packages), 1)
 
     def test_file_with_no_version(self):
@@ -51,9 +54,21 @@ class TestRequirementFileParserTestCases(unittest.TestCase):
         Check a package with no version, should skip
         """
         with open(os.path.join(BASE_PATH, 'files/requirements_unpinned.txt')) as f:
-            packages = parse_requirements_file(f)
+            packages, index = parse_requirements_file(f)
 
+        self.assertIsNone(index)
         self.assertEqual(len(packages), 0)
+
+    def test_file_with_custom_index(self):
+        """
+        Test that a requirements file with a custom package index (private
+        cheeseshop)
+        """
+        with open(os.path.join(BASE_PATH, 'files/requirements_custom_index.txt')) as f:
+            packages, index = parse_requirements_file(f)
+
+        self.assertEquals(index, 'http://pypi-cheeseshop-index/simple')
+        self.assertEqual(len(packages), 1)
 
 
 class TestCheckPackageTestCases(unittest.TestCase):
